@@ -80,20 +80,20 @@ def apply_filter(img):
 
         if filter_option == "Glasses":
 
-    gw = int(w * 1.05)
-    gh = int(h * 0.35)
-
-    gx = int(x - w * 0.02)
-    gy = int(y + h * 0.30)
-
-    img = overlay_image(
-        img,
-        overlay,
-        gx,
-        gy,
-        gw,
-        gh
-    )
+            gw = int(w * 1.05)
+            gh = int(h * 0.35)
+        
+            gx = int(x - w * 0.02)
+            gy = int(y + h * 0.30)
+        
+            img = overlay_image(
+                img,
+                overlay,
+                gx,
+                gy,
+                gw,
+                gh
+            )
 
         elif filter_option == "Mask":
 
