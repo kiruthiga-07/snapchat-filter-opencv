@@ -38,7 +38,7 @@ mode = st.radio(
 )
 
 
-# ---------- Overlay function ----------
+# ---------- Overlay ----------
 def overlay_image(bg, overlay, x, y, w, h):
 
     if overlay is None:
@@ -95,8 +95,20 @@ def apply_filter(img):
         if overlay is None:
             continue
 
-        # -------- Glasses --------
+        # -------- Glasses (eyes) --------
         if filter_option == "Glasses":
+
+            gw = int(w * 1.0)
+            gh = int(h * 0.30)
+
+            gx = int(x)
+            gy = int(y + h * 0.32)
+
+            img = overlay_image(img, overlay, gx, gy, gw, gh)
+
+
+        # -------- Eye Mask --------
+        elif filter_option == "Mask":
 
             gw = int(w * 1.05)
             gh = int(h * 0.35)
@@ -104,67 +116,48 @@ def apply_filter(img):
             gx = int(x - w * 0.02)
             gy = int(y + h * 0.30)
 
-            img = overlay_image(
-                img,
-                overlay,
-                gx,
-                gy,
-                gw,
-                gh
-            )
+            img = overlay_image(img, overlay, gx, gy, gw, gh)
 
-        # -------- Mask --------
-        elif filter_option == "Mask":
-
-            img = overlay_image(
-                img,
-                overlay,
-                x,
-                int(y + h * 0.55),
-                w,
-                int(h * 0.45)
-            )
 
         # -------- Moustache --------
         elif filter_option == "Moustache":
 
-            img = overlay_image(
-                img,
-                overlay,
-                int(x + w * 0.2),
-                int(y + h * 0.65),
-                int(w * 0.6),
-                int(h * 0.25)
-            )
+            gw = int(w * 0.55)
+            gh = int(h * 0.18)
+
+            gx = int(x + w * 0.22)
+            gy = int(y + h * 0.58)
+
+            img = overlay_image(img, overlay, gx, gy, gw, gh)
+
 
         # -------- Cap --------
         elif filter_option == "Cap":
 
-            img = overlay_image(
-                img,
-                overlay,
-                x,
-                int(y - h * 0.5),
-                w,
-                int(h * 0.6)
-            )
+            gw = int(w * 1.1)
+            gh = int(h * 0.60)
 
-        # -------- Dog ears --------
+            gx = int(x - w * 0.05)
+            gy = int(y - h * 0.55)
+
+            img = overlay_image(img, overlay, gx, gy, gw, gh)
+
+
+        # -------- DogEars --------
         elif filter_option == "DogEars":
 
-            img = overlay_image(
-                img,
-                overlay,
-                x,
-                int(y - h * 0.5),
-                w,
-                int(h * 0.6)
-            )
+            gw = int(w * 1.1)
+            gh = int(h * 0.65)
+
+            gx = int(x - w * 0.05)
+            gy = int(y - h * 0.60)
+
+            img = overlay_image(img, overlay, gx, gy, gw, gh)
 
     return img
 
 
-# ================= IMAGE MODE =================
+# ================= IMAGE =================
 
 if mode == "Image":
 
@@ -187,7 +180,7 @@ if mode == "Image":
         st.image(img)
 
 
-# ================= CAMERA MODE =================
+# ================= CAMERA =================
 
 class VideoProcessor(VideoProcessorBase):
 
@@ -195,7 +188,7 @@ class VideoProcessor(VideoProcessorBase):
 
         img = frame.to_ndarray(format="bgr24")
 
-        # -------- sharpen --------
+        # sharpen
         kernel = np.array([
             [0, -1, 0],
             [-1, 5, -1],
