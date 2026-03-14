@@ -23,7 +23,6 @@ filters = {
     "Moustache": cv2.imread("filters/moustache.png", -1),
     "Cap": cv2.imread("filters/cap.png", -1),
     "DogEars": cv2.imread("filters/dogears.png", -1),
-    "Emoji": cv2.imread("filters/emoji.png", -1),
 }
 
 
@@ -39,13 +38,31 @@ mode = st.radio(
 )
 
 
-# ---------- Overlay ----------
+# ---------- Overlay function ----------
 def overlay_image(bg, overlay, x, y, w, h):
 
     if overlay is None:
         return bg
 
-    overlay = cv2.resize(overlay, (w, h))
+    overlay = cv2.resize(
+        overlay,
+        (w, h),
+        interpolation=cv2.INTER_AREA
+    )
+
+    h_bg, w_bg, _ = bg.shape
+
+    if x < 0:
+        x = 0
+    if y < 0:
+        y = 0
+
+    if x + w > w_bg:
+        w = w_bg - x
+    if y + h > h_bg:
+        h = h_bg - y
+
+    overlay = overlay[0:h, 0:w]
 
     if overlay.shape[2] == 4:
 
@@ -78,14 +95,15 @@ def apply_filter(img):
         if overlay is None:
             continue
 
+        # -------- Glasses --------
         if filter_option == "Glasses":
 
             gw = int(w * 1.05)
             gh = int(h * 0.35)
-        
+
             gx = int(x - w * 0.02)
             gy = int(y + h * 0.30)
-        
+
             img = overlay_image(
                 img,
                 overlay,
@@ -95,60 +113,58 @@ def apply_filter(img):
                 gh
             )
 
+        # -------- Mask --------
         elif filter_option == "Mask":
 
             img = overlay_image(
-                img, overlay,
+                img,
+                overlay,
                 x,
-                y + int(h/2),
+                int(y + h * 0.55),
                 w,
-                int(h/2)
+                int(h * 0.45)
             )
 
+        # -------- Moustache --------
         elif filter_option == "Moustache":
 
             img = overlay_image(
-                img, overlay,
-                x + int(w*0.2),
-                y + int(h*0.65),
-                int(w*0.6),
-                int(h*0.25)
+                img,
+                overlay,
+                int(x + w * 0.2),
+                int(y + h * 0.65),
+                int(w * 0.6),
+                int(h * 0.25)
             )
 
+        # -------- Cap --------
         elif filter_option == "Cap":
 
             img = overlay_image(
-                img, overlay,
+                img,
+                overlay,
                 x,
-                y - int(h*0.5),
+                int(y - h * 0.5),
                 w,
-                int(h*0.6)
+                int(h * 0.6)
             )
 
+        # -------- Dog ears --------
         elif filter_option == "DogEars":
 
             img = overlay_image(
-                img, overlay,
+                img,
+                overlay,
                 x,
-                y - int(h*0.5),
+                int(y - h * 0.5),
                 w,
-                int(h*0.6)
-            )
-
-        elif filter_option == "Emoji":
-
-            img = overlay_image(
-                img, overlay,
-                x,
-                y,
-                w,
-                h
+                int(h * 0.6)
             )
 
     return img
 
 
-# ================= IMAGE =================
+# ================= IMAGE MODE =================
 
 if mode == "Image":
 
@@ -171,13 +187,22 @@ if mode == "Image":
         st.image(img)
 
 
-# ================= CAMERA =================
+# ================= CAMERA MODE =================
 
 class VideoProcessor(VideoProcessorBase):
 
     def recv(self, frame):
 
         img = frame.to_ndarray(format="bgr24")
+
+        # -------- sharpen --------
+        kernel = np.array([
+            [0, -1, 0],
+            [-1, 5, -1],
+            [0, -1, 0]
+        ])
+
+        img = cv2.filter2D(img, -1, kernel)
 
         img = apply_filter(img)
 
@@ -191,5 +216,13 @@ if mode == "Camera":
 
     webrtc_streamer(
         key="snap",
-        video_processor_factory=VideoProcessor
+        video_processor_factory=VideoProcessor,
+        media_stream_constraints={
+            "video": {
+                "width": {"ideal": 1280},
+                "height": {"ideal": 720},
+                "frameRate": {"ideal": 30},
+            },
+            "audio": False,
+        },
     )
