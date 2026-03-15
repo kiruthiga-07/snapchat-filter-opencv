@@ -6,21 +6,16 @@ from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import av
 import os
 
-st.set_page_config(page_title="Snapchat Filter Pro", layout="centered")
 st.title("Snapchat Multi Filter OpenCV 😎")
 
-# ---------- Face detector ----------
-# Added a check to ensure the file exists to prevent crashing
-if not os.path.exists("haarcascade_frontalface_default.xml"):
-    st.error("Model file 'haarcascade_frontalface_default.xml' not found! Please upload it to your repo.")
-    st.stop()
-
+# ---------- Detectors ----------
+# Ensure BOTH files are in your GitHub repo
 face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+nose_cascade = cv2.CascadeClassifier("haarcascade_mcs_nose.xml")
 
 # ---------- Load filters ----------
 @st.cache_resource
 def load_filters():
-    # Using -1 to load the Alpha Channel (transparency)
     return {
         "None": None,
         "Glasses": cv2.imread("filters/glasses.png", -1),
@@ -31,116 +26,76 @@ def load_filters():
     }
 
 filters = load_filters()
-
 filter_option = st.selectbox("Select Filter", list(filters.keys()))
-mode = st.radio("Mode", ["Image", "Camera"], horizontal=True)
+mode = st.radio("Mode", ["Image", "Camera"])
 
-# ---------- Improved Overlay Function ----------
+# ---------- Overlay Logic ----------
 def overlay_image(bg, overlay, x, y, w, h):
-    if overlay is None:
-        return bg
-
-    # Calculate boundaries to prevent indexing errors if filter goes off-screen
+    if overlay is None or w <= 0 or h <= 0: return bg
+    overlay = cv2.resize(overlay, (w, h), interpolation=cv2.INTER_AREA)
     h_bg, w_bg = bg.shape[:2]
-    
-    # Resize filter to target size
-    overlay_res = cv2.resize(overlay, (w, h), interpolation=cv2.INTER_AREA)
-
-    # Calculate clipping
-    x1, y1 = max(x, 0), max(y, 0)
-    x2, y2 = min(x + w, w_bg), min(y + h, h_bg)
-
-    # Calculate corresponding region in the overlay
+    x1, y1, x2, y2 = max(x, 0), max(y, 0), min(x + w, w_bg), min(y + h, h_bg)
     ol_x1, ol_y1 = x1 - x, y1 - y
     ol_x2, ol_y2 = ol_x1 + (x2 - x1), ol_y1 + (y2 - y1)
-
-    if x1 >= x2 or y1 >= y2:
-        return bg
-
-    # Slice the regions
-    overlay_patch = overlay_res[ol_y1:ol_y2, ol_x1:ol_x2]
+    if x1 >= x2 or y1 >= y2: return bg
+    overlay_patch = overlay[ol_y1:ol_y2, ol_x1:ol_x2]
     bg_patch = bg[y1:y2, x1:x2]
-
-    # Alpha blending
     if overlay_patch.shape[2] == 4:
         alpha = overlay_patch[:, :, 3] / 255.0
         for c in range(3):
-            bg_patch[:, :, c] = (alpha * overlay_patch[:, :, c] + 
-                                (1.0 - alpha) * bg_patch[:, :, c])
+            bg_patch[:, :, c] = (alpha * overlay_patch[:, :, c] + (1 - alpha) * bg_patch[:, :, c])
         bg[y1:y2, x1:x2] = bg_patch
-
     return bg
 
-# ---------- Apply filter with Adjusted Offsets ----------
+# ---------- Apply Filter ----------
 def apply_filter(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
     overlay = filters[filter_option]
-
-    if overlay is None:
-        return img
+    if overlay is None: return img
 
     for (x, y, w, h) in faces:
-        # -------- Glasses --------
-        if filter_option == "Glasses":
-            gw, gh = int(w * 0.9), int(h * 0.25)
-            gx, gy = int(x + w * 0.05), int(y + h * 0.32)
-            img = overlay_image(img, overlay, gx, gy, gw, gh)
+        roi_gray = gray[y:y+h, x:x+w]
+        noses = nose_cascade.detectMultiScale(roi_gray, 1.3, 5)
 
-        # -------- Mask (Wider and higher) --------
-        elif filter_option == "Mask":
-            # Made it 20% wider than the face to look natural
-            gw, gh = int(w * 1.2), int(h * 0.45)
-            # Offset x to the left to keep it centered since it's wider
-            gx, gy = int(x - w * 0.1), int(y + h * 0.22) 
-            img = overlay_image(img, overlay, gx, gy, gw, gh)
-
-        # -------- Moustache (Lowered to lip line) --------
-        elif filter_option == "Moustache":
-            gw, gh = int(w * 0.45), int(h * 0.15)
-            gx = int(x + w * 0.275)
-            # Changed from 0.58/0.65 to 0.70 to move it down to the mouth
-            gy = int(y + h * 0.70) 
-            img = overlay_image(img, overlay, gx, gy, gw, gh)
-
-        # -------- Cap --------
-        elif filter_option == "Cap":
-            gw, gh = int(w * 1.1), int(h * 0.65)
-            gx, gy = int(x - w * 0.05), int(y - h * 0.50)
-            img = overlay_image(img, overlay, gx, gy, gw, gh)
-
-        # -------- DogEars --------
+        # 1. Head Features (Anchored to Face Box)
+        if filter_option == "Cap":
+            img = overlay_image(img, overlay, x, int(y - h*0.5), w, int(h*0.7))
         elif filter_option == "DogEars":
-            gw, gh = int(w * 1.2), int(h * 0.65)
-            gx, gy = int(x - w * 0.1), int(y - h * 0.50)
-            img = overlay_image(img, overlay, gx, gy, gw, gh)
+            img = overlay_image(img, overlay, int(x - w*0.1), int(y - h*0.5), int(w*1.2), int(h*0.7))
 
+        # 2. Nose/Eye Features (Anchored to Nose Detection)
+        for (nx, ny, nw, nh) in noses:
+            # Absolute positions
+            n_top = y + ny
+            n_bot = y + ny + nh
+            n_center_x = x + nx + (nw // 2)
+
+            if filter_option == "Moustache":
+                mw = int(nw * 2.5)
+                mh = int(mw * overlay.shape[0] / overlay.shape[1])
+                img = overlay_image(img, overlay, n_center_x - (mw//2), n_bot - int(mh*0.3), mw, mh)
+            
+            elif filter_option == "Mask" or filter_option == "Glasses":
+                mw = int(w * 1.1) if filter_option == "Mask" else int(w * 0.9)
+                mh = int(mw * overlay.shape[0] / overlay.shape[1])
+                img = overlay_image(img, overlay, (x+w//2) - (mw//2), n_top - (mh//2), mw, mh)
+            break # Use only the first nose found
+            
     return img
-# ================= RUNTIME LOGIC =================
 
+# ================= RUNTIME =================
 if mode == "Image":
     uploaded = st.file_uploader("Upload Image", type=["jpg", "png", "jpeg"])
     if uploaded:
         image = Image.open(uploaded)
         img = np.array(image)
-        # Convert RGB to BGR for OpenCV processing
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         img = apply_filter(img)
-        # Convert back to RGB for Streamlit display
-        st.image(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), use_column_width=True)
-
+        st.image(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 else:
     class VideoProcessor(VideoProcessorBase):
         def recv(self, frame):
             img = frame.to_ndarray(format="bgr24")
-            # Apply filter directly
-            img = apply_filter(img)
-            return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-    webrtc_streamer(
-        key="filter-app",
-        video_processor_factory=VideoProcessor,
-        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-        media_stream_constraints={"video": True, "audio": False},
-        async_processing=True,
-    )
+            return av.VideoFrame.from_ndarray(apply_filter(img), format="bgr24")
+    webrtc_streamer(key="snap", video_processor_factory=VideoProcessor)
