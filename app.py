@@ -6,10 +6,11 @@ from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import av
 import os
 
+st.set_page_config(page_title="Snapchat Filter Pro", layout="centered")
 st.title("Snapchat Multi Filter OpenCV 😎")
 
-# ---------- Detectors ----------
-# Ensure BOTH files are in your GitHub repo
+# ---------- Load Detectors ----------
+# Make sure both XML files are in your main GitHub folder!
 face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 nose_cascade = cv2.CascadeClassifier("haarcascade_mcs_nose.xml")
 
@@ -27,7 +28,7 @@ def load_filters():
 
 filters = load_filters()
 filter_option = st.selectbox("Select Filter", list(filters.keys()))
-mode = st.radio("Mode", ["Image", "Camera"])
+mode = st.radio("Mode", ["Image", "Camera"], horizontal=True)
 
 # ---------- Overlay Logic ----------
 def overlay_image(bg, overlay, x, y, w, h):
@@ -47,7 +48,7 @@ def overlay_image(bg, overlay, x, y, w, h):
         bg[y1:y2, x1:x2] = bg_patch
     return bg
 
-# ---------- Apply Filter ----------
+# ---------- The Corrected Alignment Logic ----------
 def apply_filter(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
@@ -58,15 +59,16 @@ def apply_filter(img):
         roi_gray = gray[y:y+h, x:x+w]
         noses = nose_cascade.detectMultiScale(roi_gray, 1.3, 5)
 
-        # 1. Head Features (Anchored to Face Box)
+        # 1. HEAD FILTERS (Cap/Ears)
         if filter_option == "Cap":
-            img = overlay_image(img, overlay, x, int(y - h*0.5), w, int(h*0.7))
+            # Moved higher to sit on the very top of the head
+            img = overlay_image(img, overlay, x, int(y - h*0.65), w, int(h*0.7))
         elif filter_option == "DogEars":
-            img = overlay_image(img, overlay, int(x - w*0.1), int(y - h*0.5), int(w*1.2), int(h*0.7))
+            img = overlay_image(img, overlay, int(x - w*0.1), int(y - h*0.6), int(w*1.2), int(h*0.7))
 
-        # 2. Nose/Eye Features (Anchored to Nose Detection)
+        # 2. NOSE/EYE/MOUSTACHE FILTERS
         for (nx, ny, nw, nh) in noses:
-            # Absolute positions
+            # Absolute nose positions
             n_top = y + ny
             n_bot = y + ny + nh
             n_center_x = x + nx + (nw // 2)
@@ -74,13 +76,22 @@ def apply_filter(img):
             if filter_option == "Moustache":
                 mw = int(nw * 2.5)
                 mh = int(mw * overlay.shape[0] / overlay.shape[1])
-                img = overlay_image(img, overlay, n_center_x - (mw//2), n_bot - int(mh*0.3), mw, mh)
+                # Positioning: Bottom of nose minus a small overlap to sit on lip
+                # Using n_bot - int(mh*0.6) to PULL IT UP from the chin
+                img = overlay_image(img, overlay, n_center_x - (mw//2), n_bot - int(mh*0.7), mw, mh)
             
-            elif filter_option == "Mask" or filter_option == "Glasses":
-                mw = int(w * 1.1) if filter_option == "Mask" else int(w * 0.9)
+            elif filter_option == "Mask":
+                mw = int(w * 1.2) # Wider for full face coverage
                 mh = int(mw * overlay.shape[0] / overlay.shape[1])
-                img = overlay_image(img, overlay, (x+w//2) - (mw//2), n_top - (mh//2), mw, mh)
-            break # Use only the first nose found
+                # Positioning: Centered on nose bridge, PULLING UP from the nose
+                img = overlay_image(img, overlay, (x+w//2) - (mw//2), n_top - int(mh*0.6), mw, mh)
+
+            elif filter_option == "Glasses":
+                mw = int(w * 0.9)
+                mh = int(mw * overlay.shape[0] / overlay.shape[1])
+                # Positioning: Pulled UP to sit exactly across the eyes
+                img = overlay_image(img, overlay, (x+w//2) - (mw//2), n_top - int(mh*0.55), mw, mh)
+            break 
             
     return img
 
