@@ -10,7 +10,6 @@ st.set_page_config(page_title="Snapchat Filter Pro", layout="centered")
 st.title("Snapchat Multi Filter OpenCV 😎")
 
 # ---------- Load Detectors ----------
-# Make sure both XML files are in your main GitHub folder!
 face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 nose_cascade = cv2.CascadeClassifier("haarcascade_mcs_nose.xml")
 
@@ -48,7 +47,7 @@ def overlay_image(bg, overlay, x, y, w, h):
         bg[y1:y2, x1:x2] = bg_patch
     return bg
 
-# ---------- The Corrected Alignment Logic ----------
+# ---------- The Adjusted Scaling Logic ----------
 def apply_filter(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
@@ -59,37 +58,41 @@ def apply_filter(img):
         roi_gray = gray[y:y+h, x:x+w]
         noses = nose_cascade.detectMultiScale(roi_gray, 1.3, 5)
 
-        # 1. HEAD FILTERS (Cap/Ears)
+        # 1. HEAD FILTERS (Cap/Ears) - Scaled Down
         if filter_option == "Cap":
-            # Moved higher to sit on the very top of the head
-            img = overlay_image(img, overlay, x, int(y - h*0.65), w, int(h*0.7))
+            # Width reduced from 1.1 to 0.9 for a tighter fit
+            mw = int(w * 0.9)
+            mh = int(mw * overlay.shape[0] / overlay.shape[1])
+            img = overlay_image(img, overlay, x + (w//2) - (mw//2), int(y - mh*0.8), mw, mh)
+            
         elif filter_option == "DogEars":
-            img = overlay_image(img, overlay, int(x - w*0.1), int(y - h*0.6), int(w*1.2), int(h*0.7))
+            # Width reduced from 1.2 to 1.0
+            mw = int(w * 1.0)
+            mh = int(mw * overlay.shape[0] / overlay.shape[1])
+            img = overlay_image(img, overlay, x + (w//2) - (mw//2), int(y - mh*0.7), mw, mh)
 
         # 2. NOSE/EYE/MOUSTACHE FILTERS
         for (nx, ny, nw, nh) in noses:
-            # Absolute nose positions
             n_top = y + ny
             n_bot = y + ny + nh
             n_center_x = x + nx + (nw // 2)
 
             if filter_option == "Moustache":
-                mw = int(nw * 2.5)
+                # Reduced width from 2.5 to 1.8 of nose width
+                mw = int(nw * 1.8) 
                 mh = int(mw * overlay.shape[0] / overlay.shape[1])
-                # Positioning: Bottom of nose minus a small overlap to sit on lip
-                # Using n_bot - int(mh*0.6) to PULL IT UP from the chin
                 img = overlay_image(img, overlay, n_center_x - (mw//2), n_bot - int(mh*0.7), mw, mh)
             
             elif filter_option == "Mask":
-                mw = int(w * 1.2) # Wider for full face coverage
+                # Reduced width from 1.2 to 1.0 (Face width)
+                mw = int(w * 1.0) 
                 mh = int(mw * overlay.shape[0] / overlay.shape[1])
-                # Positioning: Centered on nose bridge, PULLING UP from the nose
                 img = overlay_image(img, overlay, (x+w//2) - (mw//2), n_top - int(mh*0.6), mw, mh)
 
             elif filter_option == "Glasses":
-                mw = int(w * 0.9)
+                # Reduced width from 0.9 to 0.8
+                mw = int(w * 0.8)
                 mh = int(mw * overlay.shape[0] / overlay.shape[1])
-                # Positioning: Pulled UP to sit exactly across the eyes
                 img = overlay_image(img, overlay, (x+w//2) - (mw//2), n_top - int(mh*0.55), mw, mh)
             break 
             
