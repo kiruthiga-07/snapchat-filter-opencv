@@ -4,11 +4,9 @@ import numpy as np
 from PIL import Image
 from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
 import av
-import threading
 import os
 
 # 1. SETUP & PATH HANDLING
-# This ensures the app finds your files on Streamlit Cloud
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FACE_XML = os.path.join(BASE_DIR, "haarcascade_frontalface_default.xml")
 NOSE_XML = os.path.join(BASE_DIR, "haarcascade_mcs_nose.xml")
@@ -17,24 +15,18 @@ RTC_CONFIGURATION = RTCConfiguration(
     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
-# Shared memory for snapshots
-lock = threading.Lock()
-container = {"img": None}
-
 st.set_page_config(page_title="Snapchat Filter Pro", layout="wide")
 st.title("Snapchat Multi-Filter OpenCV 😎")
 
-# 2. LOAD MODELS & FILTERS (With Error Catching)
+# 2. LOAD MODELS & FILTERS
 @st.cache_resource
 def load_resources():
-    # Verify XML files exist before loading
     if not os.path.exists(FACE_XML) or not os.path.exists(NOSE_XML):
         return None, None, None
 
     face = cv2.CascadeClassifier(FACE_XML)
     nose = cv2.CascadeClassifier(NOSE_XML)
     
-    # Check if filters folder exists
     filter_dir = os.path.join(BASE_DIR, "filters")
     if not os.path.exists(filter_dir):
         return face, nose, {}
@@ -53,10 +45,7 @@ face_cascade, nose_cascade, filters = load_resources()
 
 # Safety Check UI
 if face_cascade is None or face_cascade.empty():
-    st.error("🚨 CRITICAL ERROR: haarcascade_frontalface_default.xml not found in your GitHub repo!")
-    st.stop()
-if nose_cascade is None or nose_cascade.empty():
-    st.error("🚨 CRITICAL ERROR: haarcascade_mcs_nose.xml not found in your GitHub repo!")
+    st.error("🚨 XML Files not found! Make sure they are in your GitHub repo.")
     st.stop()
 
 # 3. OVERLAY & FILTER LOGIC
@@ -119,8 +108,6 @@ with tab1:
     def video_frame_callback(frame):
         img = frame.to_ndarray(format="bgr24")
         processed_img = apply_filter(img, filter_option)
-        with lock:
-            container["img"] = processed_img
         return av.VideoFrame.from_ndarray(processed_img, format="bgr24")
 
     webrtc_streamer(
@@ -132,18 +119,10 @@ with tab1:
         async_processing=True,
     )
 
-    if st.button("📸 Take Photo"):
-        with lock:
-            snap = container["img"]
-        if snap is not None:
-            st.image(cv2.cvtColor(snap, cv2.COLOR_BGR2RGB), caption="Snapshot (Right-click to save)")
-        else:
-            st.warning("Start the camera first!")
-
 with tab2:
     uploaded_file = st.file_uploader("Upload Image", type=['jpg', 'jpeg', 'png'])
     if uploaded_file:
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         image = cv2.imdecode(file_bytes, 1)
         result = apply_filter(image, filter_option)
-        st.image(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+        st.image(cv2.cvtColor(result, cv2.COLOR_BGR2RGB), use_container_width=True)
