@@ -83,11 +83,12 @@ def apply_filter(img):
                 mh = int(mw * overlay.shape[0] / overlay.shape[1])
                 img = overlay_image(img, overlay, n_center_x - (mw//2), n_bot - int(mh*0.7), mw, mh)
             
-            elif filter_option == "Mask":
-                # Reduced width from 1.2 to 1.0 (Face width)
+           elif filter_option == "Mask":
+                # Width stays at 1.0 for the face width
                 mw = int(w * 1.0) 
                 mh = int(mw * overlay.shape[0] / overlay.shape[1])
-                img = overlay_image(img, overlay, (x+w//2) - (mw//2), n_top - int(mh*0.6), mw, mh)
+                # Positioning: 0.65 pulls it up slightly more than 0.60
+                img = overlay_image(img, overlay, (x+w//2) - (mw//2), n_top - int(mh*0.65), mw, mh)
 
             elif filter_option == "Glasses":
                 # Reduced width from 0.9 to 0.8
