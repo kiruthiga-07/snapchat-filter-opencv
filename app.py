@@ -43,11 +43,6 @@ def load_resources():
 
 face_cascade, nose_cascade, filters = load_resources()
 
-filter_option = st.sidebar.selectbox("Choose Your Filter", list(filters.keys()))
-st.sidebar.markdown("---")
-st.sidebar.write("### Instructions")
-st.sidebar.write("1. Pick a filter\n2. Use the tabs to choose Camera or Upload\n3. Click 'Take Photo' to freeze a frame.")
-
 # Safety Check UI
 if face_cascade is None or face_cascade.empty():
     st.error("🚨 XML Files not found! Make sure they are in your GitHub repo.")
