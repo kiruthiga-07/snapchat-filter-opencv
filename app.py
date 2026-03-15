@@ -93,12 +93,18 @@ def apply_filter(img):
             gx, gy = x, int(y + h * 0.15) # Decreased from 0.25 to 0.15
             img = overlay_image(img, overlay, gx, gy, gw, gh)
 
-        # -------- Moustache (Now moved DOWN to mouth level) --------
+        # -------- Moustache (Moved UP from previous version) --------
         elif filter_option == "Moustache":
-            gw, gh = int(w * 0.45), int(h * 0.18)
-            gx, gy = int(x + w * 0.28), int(y + h * 0.72) # Increased from 0.68 to 0.72
+            # Width and Height scaling
+            gw, gh = int(w * 0.45), int(h * 0.15)
+            
+            # gx: Centers it horizontally (0.275 is half of the remaining 0.55 width)
+            gx = int(x + w * 0.275) 
+            
+            # gy: 0.65 places it exactly between the nose tip and the upper lip
+            gy = int(y + h * 0.65) 
+            
             img = overlay_image(img, overlay, gx, gy, gw, gh)
-
         # -------- Cap (Slightly smaller width for better fit) --------
         elif filter_option == "Cap":
             gw, gh = int(w * 1.05), int(h * 0.65) # Reduced width from 1.2 to 1.05
