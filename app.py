@@ -2,16 +2,30 @@ import streamlit as st
 import cv2
 import numpy as np
 from PIL import Image
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
 import av
-import os
+import threading
+
+# ---------- Configuration & State ----------
+RTC_CONFIGURATION = RTCConfiguration(
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+)
+
+# Use a lock to safely share the latest frame for snapshots
+lock = threading.Lock()
+container = {"img": None}
 
 st.set_page_config(page_title="Snapchat Filter Pro", layout="centered")
 st.title("Snapchat Multi Filter OpenCV 😎")
 
 # ---------- Load Detectors ----------
-face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
-nose_cascade = cv2.CascadeClassifier("haarcascade_mcs_nose.xml")
+@st.cache_resource
+def load_models():
+    face = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+    nose = cv2.CascadeClassifier("haarcascade_mcs_nose.xml")
+    return face, nose
+
+face_cascade, nose_cascade = load_models()
 
 # ---------- Load filters ----------
 @st.cache_resource
@@ -26,8 +40,7 @@ def load_filters():
     }
 
 filters = load_filters()
-filter_option = st.selectbox("Select Filter", list(filters.keys()))
-mode = st.radio("Mode", ["Image", "Camera"], horizontal=True)
+filter_option = st.sidebar.selectbox("Select Filter", list(filters.keys()))
 
 # ---------- Overlay Logic ----------
 def overlay_image(bg, overlay, x, y, w, h):
@@ -47,70 +60,72 @@ def overlay_image(bg, overlay, x, y, w, h):
         bg[y1:y2, x1:x2] = bg_patch
     return bg
 
-# ---------- The Adjusted Scaling Logic ----------
-def apply_filter(img):
+# ---------- Apply Filter ----------
+def apply_filter(img, filter_name):
+    overlay = filters[filter_name]
+    if overlay is None: return img
+    
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-    overlay = filters[filter_option]
-    if overlay is None: return img
 
     for (x, y, w, h) in faces:
         roi_gray = gray[y:y+h, x:x+w]
         noses = nose_cascade.detectMultiScale(roi_gray, 1.3, 5)
 
-        # 1. HEAD FILTERS (Cap/Ears) - Scaled Down
-        if filter_option == "Cap":
-            # Width reduced from 1.1 to 0.9 for a tighter fit
+        if filter_name == "Cap":
             mw = int(w * 0.9)
             mh = int(mw * overlay.shape[0] / overlay.shape[1])
             img = overlay_image(img, overlay, x + (w//2) - (mw//2), int(y - mh*0.8), mw, mh)
-            
-        elif filter_option == "DogEars":
-            # Width reduced from 1.2 to 1.0
+        elif filter_name == "DogEars":
             mw = int(w * 1.0)
             mh = int(mw * overlay.shape[0] / overlay.shape[1])
             img = overlay_image(img, overlay, x + (w//2) - (mw//2), int(y - mh*0.7), mw, mh)
 
-        # 2. NOSE/EYE/MOUSTACHE FILTERS
         for (nx, ny, nw, nh) in noses:
-            n_top = y + ny
-            n_bot = y + ny + nh
-            n_center_x = x + nx + (nw // 2)
-
-            if filter_option == "Moustache":
-                # Reduced width from 2.5 to 1.8 of nose width
-                mw = int(nw * 1.8) 
+            n_top, n_bot, n_center_x = y + ny, y + ny + nh, x + nx + (nw // 2)
+            if filter_name == "Moustache":
+                mw = int(nw * 1.8)
                 mh = int(mw * overlay.shape[0] / overlay.shape[1])
                 img = overlay_image(img, overlay, n_center_x - (mw//2), n_bot - int(mh*0.7), mw, mh)
-            
-            elif filter_option == "Mask":
-                # Width stays at 1.0 for the face width
-                mw = int(w * 1.0) 
+            elif filter_name == "Mask":
+                mw = int(w * 1.0)
                 mh = int(mw * overlay.shape[0] / overlay.shape[1])
-                # Positioning: 0.65 pulls it up slightly more than 0.60
                 img = overlay_image(img, overlay, (x+w//2) - (mw//2), n_top - int(mh*0.65), mw, mh)
-
-            elif filter_option == "Glasses":
-                # Reduced width from 0.9 to 0.8
+            elif filter_name == "Glasses":
                 mw = int(w * 0.8)
                 mh = int(mw * overlay.shape[0] / overlay.shape[1])
                 img = overlay_image(img, overlay, (x+w//2) - (mw//2), n_top - int(mh*0.55), mw, mh)
             break 
-            
     return img
 
-# ================= RUNTIME =================
-if mode == "Image":
-    uploaded = st.file_uploader("Upload Image", type=["jpg", "png", "jpeg"])
-    if uploaded:
-        image = Image.open(uploaded)
-        img = np.array(image)
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        img = apply_filter(img)
-        st.image(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-else:
-    class VideoProcessor(VideoProcessorBase):
-        def recv(self, frame):
-            img = frame.to_ndarray(format="bgr24")
-            return av.VideoFrame.from_ndarray(apply_filter(img), format="bgr24")
-    webrtc_streamer(key="snap", video_processor_factory=VideoProcessor)
+# ---------- Camera Logic ----------
+def video_frame_callback(frame):
+    img = frame.to_ndarray(format="bgr24")
+    # Apply the filter selected in the sidebar
+    img = apply_filter(img, filter_option)
+    
+    # Store the frame for the snapshot feature
+    with lock:
+        container["img"] = img
+        
+    return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+ctx = webrtc_streamer(
+    key="filter-app",
+    mode=WebRtcMode.SENDRECV,
+    rtc_configuration=RTC_CONFIGURATION,
+    video_frame_callback=video_frame_callback,
+    media_stream_constraints={"video": True, "audio": False},
+    async_processing=True,
+)
+
+# ---------- Snapshot Feature ----------
+if st.button("📸 Take Photo"):
+    with lock:
+        snap = container["img"]
+    if snap is not None:
+        # Convert BGR to RGB for Streamlit
+        snap_rgb = cv2.cvtColor(snap, cv2.COLOR_BGR2RGB)
+        st.image(snap_rgb, caption="Your Snapshot (Right-click to save)")
+    else:
+        st.warning("Please start the camera first!")
