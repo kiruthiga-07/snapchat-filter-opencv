@@ -81,37 +81,37 @@ def apply_filter(img):
         return img
 
     for (x, y, w, h) in faces:
-        # These multipliers are tuned for standard front-facing PNGs
+        # -------- Glasses (Now moved UP to eye level) --------
         if filter_option == "Glasses":
             gw, gh = int(w * 0.9), int(h * 0.25)
-            gx, gy = int(x + w * 0.05), int(y + h * 0.35)
+            gx, gy = int(x + w * 0.05), int(y + h * 0.28) # Decreased from 0.35 to 0.28
             img = overlay_image(img, overlay, gx, gy, gw, gh)
 
+        # -------- Eye Mask (Now moved UP from nose to eyes) --------
         elif filter_option == "Mask":
-            # Mask needs to be slightly wider than the face
-            gw, gh = int(w * 1.0), int(h * 0.45)
-            gx, gy = x, int(y + h * 0.25)
+            gw, gh = int(w * 1.0), int(h * 0.40)
+            gx, gy = x, int(y + h * 0.15) # Decreased from 0.25 to 0.15
             img = overlay_image(img, overlay, gx, gy, gw, gh)
 
+        # -------- Moustache (Now moved DOWN to mouth level) --------
         elif filter_option == "Moustache":
-            # Placed between nose and mouth
-            gw, gh = int(w * 0.4), int(h * 0.15)
-            gx, gy = int(x + w * 0.3), int(y + h * 0.68)
+            gw, gh = int(w * 0.45), int(h * 0.18)
+            gx, gy = int(x + w * 0.28), int(y + h * 0.72) # Increased from 0.68 to 0.72
             img = overlay_image(img, overlay, gx, gy, gw, gh)
 
+        # -------- Cap (Slightly smaller width for better fit) --------
         elif filter_option == "Cap":
-            # Sits on top of the head (y is negative relative to detected box)
-            gw, gh = int(w * 1.2), int(h * 0.7)
+            gw, gh = int(w * 1.05), int(h * 0.65) # Reduced width from 1.2 to 1.05
+            gx, gy = int(x - w * 0.02), int(y - h * 0.50)
+            img = overlay_image(img, overlay, gx, gy, gw, gh)
+
+        # -------- DogEars (Kept same as you liked it) --------
+        elif filter_option == "DogEars":
+            gw, gh = int(w * 1.2), int(h * 0.65)
             gx, gy = int(x - w * 0.1), int(y - h * 0.55)
             img = overlay_image(img, overlay, gx, gy, gw, gh)
 
-        elif filter_option == "DogEars":
-            gw, gh = int(w * 1.2), int(h * 0.6)
-            gx, gy = int(x - w * 0.1), int(y - h * 0.45)
-            img = overlay_image(img, overlay, gx, gy, gw, gh)
-
     return img
-
 # ================= RUNTIME LOGIC =================
 
 if mode == "Image":
