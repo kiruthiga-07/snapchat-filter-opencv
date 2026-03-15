@@ -92,7 +92,7 @@ def apply_filter(img, filter_name):
                 mw = int(nw * 1.8)
                 mh = int(mw * overlay.shape[0] / overlay.shape[1])
                 # Changed from 0.7 to 0.5 to move it down slightly
-                output = overlay_image(output, overlay, n_center_x - (mw//2), n_bot - int(mh*0.6), mw, mh)
+                output = overlay_image(output, overlay, n_center_x - (mw//2), n_bot - int(mh*0.65), mw, mh)
             elif filter_name == "Mask":
                 mw = int(w * 1.0); mh = int(mw * overlay.shape[0] / overlay.shape[1])
                 output = overlay_image(output, overlay, (x+w//2) - (mw//2), n_top - int(mh*0.65), mw, mh)
